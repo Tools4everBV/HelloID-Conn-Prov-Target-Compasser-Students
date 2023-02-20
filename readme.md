@@ -103,4 +103,8 @@ For this specific connector, a new account will also be created and correlated d
 
 ## HelloID docs
 
+The forum topic for discussion about this specific connector can be found at
+
+https://forum.helloid.com/forum/helloid-connectors/provisioning/1293-helloid-conn-prov-target-compasser-students
+
 The official HelloID documentation can be found at: https://docs.helloid.com/
