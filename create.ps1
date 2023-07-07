@@ -1,7 +1,7 @@
 #####################################################
 # HelloID-Conn-Prov-Target-Compasser-Students-Create
 #
-# Version: 1.0.0
+# Version: 1.1.0
 #####################################################
 #region Initalization functions
 
@@ -27,13 +27,15 @@ $projectHashTable = @{
 
 # Account mapping
 $account = [PSCustomObject]@{
-    remote_id  = $StudentNumber
-    email      = "$($p.Accounts.MicrosoftActiveDirectory.mail)"
-    project_id = ""                                       #Project_id determined automatically later in script
-    firstname  = $p.Name.GivenName
-    gender     = ""                                       #gender determined automatically later in script
-    lastname   = $p.Name.FamilyName
-    letters    = $p.Name.Initials
+    remote_id           = $StudentNumber
+    email               = "$($p.Accounts.MicrosoftActiveDirectory.mail)"
+    project_id          = ""                                       #Project_id determined automatically later in script
+    firstname           = $p.Name.GivenName
+    gender              = ""                                       #gender determined automatically later in script
+    lastname            = $p.Name.FamilyName
+    letters             = $p.Name.Initials
+    linkname            = $p.Name.FamilyNamePrefix
+    remindoconnect_code = $studentNumber
 }
 
 
@@ -294,8 +296,8 @@ try {
                     letters             = $account.letters
                     remote_id           = $account.remote_id
                     project_id          = $account.project_id
-                    linkname            = $p.Name.FamilyNamePrefix
-                    remindoconnect_code = $studentNumber
+                    linkname            = $account.linkname
+                    remindoconnect_code = $account.remindoconnect_code 
                     status              = "inactive"
                 }
                 $splatParams = @{
@@ -318,12 +320,14 @@ try {
             'Update-Correlate' {
                 Write-Verbose "Updating and correlating Compasser-Students account"
                 $body = @{
-                    email      = $account.email
-                    firstname  = $account.firstname
-                    gender     = $account.gender
-                    lastname   = $account.lastname
-                    letters    = $account.letters
-                    project_id = $account.project_id
+                    email               = $account.email
+                    firstname           = $account.firstname
+                    gender              = $account.gender
+                    lastname            = $account.lastname
+                    letters             = $account.letters
+                    linkname            = $account.linkname
+                    remindoconnect_code = $account.remindoconnect_code 
+                    project_id          = $account.project_id
                 }
                 $splatParams = @{
                     Uri         = "$($config.BaseUrl)/oauth2/v1/resource/portfolios/$($responseUser.id)"

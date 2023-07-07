@@ -1,7 +1,7 @@
 #####################################################
 # HelloID-Conn-Prov-Target-Compasser-Students-Update
 #
-# Version: 1.0.0
+# Version: 1.1.0
 #####################################################
 # Initialize default values
 $config = $configuration | ConvertFrom-Json
@@ -17,22 +17,24 @@ $updatePersonOnCreate = $false   # true: perfom update if account already exist 
 
 # mapping between location and project_id
 $projectHashTable = @{
-    "location1 - Compasser"     = 1001
-    "location2 - Compasser"     = 1002
-    "location3 - Compasser"     = 1003
-    "location4 - Compasser"     = 1004
-    "location5 - Compasser"     = 1005
-    "location6 - Compasser"     = 1006
+    "location1 - Compasser" = 1001
+    "location2 - Compasser" = 1002
+    "location3 - Compasser" = 1003
+    "location4 - Compasser" = 1004
+    "location5 - Compasser" = 1005
+    "location6 - Compasser" = 1006
 }
 # Account mapping
 $account = [PSCustomObject]@{
-    remote_id  = $StudentNumber
-    email      = "$($p.Accounts.MicrosoftActiveDirectory.mail)"
-    project_id = ""                                      #Project_id determined automatically later in script
-    firstname  = $p.Name.GivenName
-    gender     = "U"                                       #gender determined automatically later in script
-    lastname   = $p.Name.FamilyName
-    letters    = $p.Name.Initials
+    remote_id           = $StudentNumber
+    email               = "$($p.Accounts.MicrosoftActiveDirectory.mail)"
+    project_id          = ""                                      #Project_id determined automatically later in script
+    firstname           = $p.Name.GivenName
+    gender              = "U"                                       #gender determined automatically later in script
+    lastname            = $p.Name.FamilyName
+    letters             = $p.Name.Initials
+    linkname            = $p.Name.FamilyNamePrefix
+    remindoconnect_code = $studentNumber
 }
 
 # Enable TLS1.2
@@ -366,14 +368,16 @@ try {
                 switch ($CreateDetailaction) {
                     'Create-Correlate' {
                         $body = @{
-                            email      = $account.email
-                            firstname  = $account.firstname
-                            gender     = $account.gender
-                            lastname   = $account.lastname
-                            letters    = $account.letters
-                            remote_id  = $account.remote_id
-                            project_id = $account.project_id
-                            status     = "active"
+                            email               = $account.email
+                            firstname           = $account.firstname
+                            gender              = $account.gender
+                            lastname            = $account.lastname
+                            letters             = $account.letters
+                            remote_id           = $account.remote_id
+                            linkname            = $account.linkname
+                            remindoconnect_code = $account.remindoconnect_code 
+                            project_id          = $account.project_id
+                            status              = "active"
                         }
                         $splatParams = @{
                             Uri         = "$($config.BaseUrl)/oauth2/v1/resource/portfolios"
@@ -393,22 +397,24 @@ try {
 
                         $aRef = $responseUser.id
                         $auditLogs.Add([PSCustomObject]@{
-                            Message = "create account with new aref [$aRef]  was successful"
-                            IsError = $false
-                        })
+                                Message = "create account with new aref [$aRef]  was successful"
+                                IsError = $false
+                            })
                         break
                     }
                     'update-Correlate' {
                         $aRef = $responseUser.id
                         Write-Verbose "Updating Compasser account with accountReference: [$aRef]"
                         $body = @{
-                            email      = $account.email
-                            firstname  = $account.firstname
-                            gender     = $account.gender
-                            lastname   = $account.lastname
-                            letters    = $account.letters
-                            project_id = $account.project_id
-                            status     = "active"
+                            email               = $account.email
+                            firstname           = $account.firstname
+                            gender              = $account.gender
+                            lastname            = $account.lastname
+                            letters             = $account.letters
+                            linkname            = $account.linkname
+                            remindoconnect_code = $account.remindoconnect_code 
+                            project_id          = $account.project_id
+                            status              = "active"
                         }
                         $splatParams = @{
                             Uri         = "$($config.BaseUrl)/oauth2/v1/resource/portfolios/$aRef"
@@ -452,12 +458,14 @@ try {
             'Update' {
                 Write-Verbose "Updating Compasser account with accountReference: [$aRef]"
                 $body = @{
-                    email      = $account.email
-                    firstname  = $account.firstname
-                    gender     = $account.gender
-                    lastname   = $account.lastname
-                    letters    = $account.letters
-                    project_id = $account.project_id
+                    email               = $account.email
+                    firstname           = $account.firstname
+                    gender              = $account.gender
+                    lastname            = $account.lastname
+                    letters             = $account.letters
+                    linkname            = $account.linkname
+                    remindoconnect_code = $account.remindoconnect_code 
+                    project_id          = $account.project_id
                 }
                 $splatParams = @{
                     Uri         = "$($config.BaseUrl)/oauth2/v1/resource/portfolios/$aRef"
@@ -503,9 +511,9 @@ catch {
 }
 finally {
     $result = [PSCustomObject]@{
-        Success    = $success
-        Account    = $account
-        Auditlogs  = $auditLogs
+        Success          = $success
+        Account          = $account
+        Auditlogs        = $auditLogs
         AccountReference = $aRef
     }
     Write-Output $result | ConvertTo-Json -Depth 10
