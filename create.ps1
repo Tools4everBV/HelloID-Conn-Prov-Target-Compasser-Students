@@ -1,7 +1,7 @@
 #####################################################
 # HelloID-Conn-Prov-Target-Compasser-Students-Create
 #
-# Version: 1.0.0
+# Version: 1.1.0
 #####################################################
 #region Initalization functions
 
@@ -17,23 +17,25 @@ $HelloIDGender = $p.Details.gender #the field in the person where the gender is 
 
 # mapping between location and project_id
 $projectHashTable = @{
-    "location1 - Compasser"     = 1001
-    "location2 - Compasser"     = 1002
-    "location3 - Compasser"     = 1003
-    "location4 - Compasser"     = 1004
-    "location5 - Compasser"     = 1005
-    "location6 - Compasser"     = 1006
+    "location1 - Compasser" = 1001
+    "location2 - Compasser" = 1002
+    "location3 - Compasser" = 1003
+    "location4 - Compasser" = 1004
+    "location5 - Compasser" = 1005
+    "location6 - Compasser" = 1006
 }
 
 # Account mapping
 $account = [PSCustomObject]@{
-    remote_id     = $StudentNumber
-    email         = "$($p.Accounts.MicrosoftActiveDirectory.mail)"
-    project_id    = ""                                       #Project_id determined automatically later in script
-    firstname     = $p.Name.GivenName
-    gender        = ""                                       #gender determined automatically later in script
-    lastname      = $p.Name.FamilyName
-    letters       = $p.Name.Initials
+    remote_id           = $StudentNumber
+    email               = "$($p.Accounts.MicrosoftActiveDirectory.mail)"
+    project_id          = ""                                       #Project_id determined automatically later in script
+    firstname           = $p.Name.GivenName
+    gender              = ""                                       #gender determined automatically later in script
+    lastname            = $p.Name.FamilyName
+    letters             = $p.Name.Initials
+    linkname            = $p.Name.FamilyNamePrefix
+    remindoconnect_code = $studentNumber
 }
 
 
@@ -194,16 +196,15 @@ function Resolve-CompasserError {
         $httpErrorObj.ErrorDetails = $ExceptionObject.ErrorDetails.Message
     }
 
-    if ($null -ne $httpErrorObj.ErrorDetails)
-    {
+    if ($null -ne $httpErrorObj.ErrorDetails) {
         try {
             $convertedErrorDetails = $httpErrorObj.ErrorDetails | ConvertFrom-Json
             $FriendlyMessage = $convertedErrorDetails.error_description
-        } catch {
+        }
+        catch {
             $FriendlyMessage = $httpErrorObj.ErrorDetails
         }
-        if ($null -ne $FriendlyMessage )
-        {
+        if ($null -ne $FriendlyMessage ) {
             $httpErrorObj.FriendlyMessage = $FriendlyMessage
         }
     }
@@ -288,14 +289,16 @@ try {
             'Create-Correlate' {
                 Write-Verbose "Creating and correlating Compasser-Students account"
                 $body = @{
-                    email      = $account.email
-                    firstname  = $account.firstname
-                    gender     = $account.gender
-                    lastname   = $account.lastname
-                    letters    = $account.letters
-                    remote_id  = $account.remote_id
-                    project_id = $account.project_id
-                    status = "inactive"
+                    email               = $account.email
+                    firstname           = $account.firstname
+                    gender              = $account.gender
+                    lastname            = $account.lastname
+                    letters             = $account.letters
+                    remote_id           = $account.remote_id
+                    project_id          = $account.project_id
+                    linkname            = $account.linkname
+                    remindoconnect_code = $account.remindoconnect_code 
+                    status              = "inactive"
                 }
                 $splatParams = @{
                     Uri         = "$($config.BaseUrl)/oauth2/v1/resource/portfolios"
@@ -317,12 +320,14 @@ try {
             'Update-Correlate' {
                 Write-Verbose "Updating and correlating Compasser-Students account"
                 $body = @{
-                    email      = $account.email
-                    firstname  = $account.firstname
-                    gender     = $account.gender
-                    lastname   = $account.lastname
-                    letters    = $account.letters
-                    project_id = $account.project_id
+                    email               = $account.email
+                    firstname           = $account.firstname
+                    gender              = $account.gender
+                    lastname            = $account.lastname
+                    letters             = $account.letters
+                    linkname            = $account.linkname
+                    remindoconnect_code = $account.remindoconnect_code 
+                    project_id          = $account.project_id
                 }
                 $splatParams = @{
                     Uri         = "$($config.BaseUrl)/oauth2/v1/resource/portfolios/$($responseUser.id)"
