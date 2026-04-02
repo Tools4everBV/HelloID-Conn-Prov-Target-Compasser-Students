@@ -39,15 +39,5 @@
             "placeholder": "http://localhost:8888",
             "required": false
         }
-    },
-    {
-        "key": "IsDebug",
-        "type": "checkbox",
-        "defaultValue": true,
-        "templateOptions": {
-            "label": "Toggle debug logging",
-            "description": "When toggled, debug logging will be displayed",
-            "required": false
-        }
     }
 ]
