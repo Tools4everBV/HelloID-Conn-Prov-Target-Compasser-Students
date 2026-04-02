@@ -1,49 +1,12 @@
-#####################################################
+#################################################
 # HelloID-Conn-Prov-Target-Compasser-Students-Enable
-#
-# Version: 1.0.0
-#####################################################
-# Initialize default values
-$config = $configuration | ConvertFrom-Json
-$p = $person | ConvertFrom-Json
-$aRef = $AccountReference | ConvertFrom-Json
-$success = $false
-$auditLogs = [System.Collections.Generic.List[PSCustomObject]]::new()
+# PowerShell V2
+#################################################
 
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
-# Set debug logging
-switch ($($config.IsDebug)) {
-    $true { $VerbosePreference = 'Continue' }
-    $false { $VerbosePreference = 'SilentlyContinue' }
-}
-
 #region functions
-function Get-AccessToken {
-    Write-Verbose 'Retrieve OAuth token'
-    $headers = @{
-        'content-type' = 'application/json'
-    }
-    $body = @{  'grant_type' = 'client_credentials'
-        'client_id'          = $($config.ClientID)
-        'client_secret'      = $($config.ClientSecret)
-    }
-    $splatOauthParams = @{
-        Uri     = "$($config.BaseUrl)/oauth2/v1/token"
-        Method  = 'POST'
-        Headers = $Headers
-        Body    = $body
-    }
-
-    if (-not  [string]::IsNullOrEmpty($config.ProxyAddress)) {
-        $splatOauthParams['Proxy'] = $config.ProxyAddress
-    }
-
-    $responseToken = Invoke-RestMethod @splatOauthParams -Verbose:$false
-    Write-Output  $responseToken.access_token
-
-}
 
 function Resolve-CompasserError {
     [CmdletBinding()]
@@ -66,7 +29,8 @@ function Resolve-CompasserError {
                 $httpErrorObj.ErrorDetails = $responseStream.ReadToEnd()
             }
         }
-    } else {
+    }
+    else {
         $httpErrorObj.ErrorDetails = $ExceptionObject.ErrorDetails.Message
     }
 
@@ -74,7 +38,8 @@ function Resolve-CompasserError {
         try {
             $convertedErrorDetails = $httpErrorObj.ErrorDetails | ConvertFrom-Json
             $FriendlyMessage = $convertedErrorDetails.error_description
-        } catch {
+        }
+        catch {
             $FriendlyMessage = $httpErrorObj.ErrorDetails
         }
         if ($null -ne $FriendlyMessage ) {
@@ -85,81 +50,167 @@ function Resolve-CompasserError {
     Write-Output $httpErrorObj
 
 }
+
+function Get-AccessToken {
+    Write-Verbose "Retrieve OAuth token"
+    $headers = @{
+        'content-type' = 'application/json'
+    }
+    $body = @{  'grant_type' = 'client_credentials'
+        'client_id'          = $($ActionContext.Configuration.ClientID)
+        'client_secret'      = $($ActionContext.Configuration.ClientSecret)
+    }
+    $splatOauthParams = @{
+        Uri     = "$($ActionContext.Configuration.BaseUrl)/oauth2/v1/token"
+        Method  = 'POST'
+        Headers = $Headers
+        Body    = $body
+    }
+
+    if (-not  [string]::IsNullOrEmpty($ActionContext.Configuration.ProxyAddress)) {
+        $splatOauthParams['Proxy'] = $ActionContext.Configuration.ProxyAddress
+    }
+
+    $responseToken = Invoke-RestMethod @splatOauthParams -Verbose:$false
+    Write-output  $responseToken.access_token
+
+}
+function Invoke-CompasserRestMethod {
+    [CmdletBinding()]
+    param (
+        [string]
+        $Method = "GET",
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Uri,
+
+        [object]
+        $Body,
+
+        [string]
+        $ContentType = 'application/json',
+
+        [System.Collections.IDictionary]
+        $Headers = @{},
+
+        [Parameter(Mandatory)]
+        [string]
+        $AccessToken
+    )
+
+    process {
+        try {
+
+            $headers.Add("Authorization", "Bearer $AccessToken")
+
+            $splatParams = @{
+                Uri         = $Uri
+                Headers     = $Headers
+                Method      = $Method
+                ContentType = $ContentType
+            }
+
+            if (-not  [string]::IsNullOrEmpty($ActionContext.Configuration.ProxyAddress)) {
+                $splatParams['Proxy'] = $ActionContext.Configuration.ProxyAddress
+            }
+
+            if ($Body) {              
+                $splatParams['Body'] = $Body
+            }
+            Invoke-RestMethod @splatParams -Verbose:$false
+        }
+        catch {
+            $PSCmdlet.ThrowTerminatingError($_)
+        }
+    }
+}
+
 #endregion
 
-# Begin
 try {
-    Write-Verbose "Verifying if a Compasser-Students account for [$($p.DisplayName)] exists"
-    # Make sure to fail the action if the account does not exist in the target system!
-
-    if ($null -eq $aRef) {
-        throw 'No account reference is available'
-    }
-    if (-not ($aRef -match '^[0-9]')) {
-        throw 'The Account reference does not start with a numeric character, which is not allowed'
+    # Verify if [accountReference] has a value
+    if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
+        throw 'The account reference could not be found'
     }
 
+    Write-Information 'Verifying if a Compasser-Students account exists'
+    $correlatedPortfolio = 'userInfo'
+    
     $accessToken = Get-AccessToken
-    $headers = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
-    $headers.Add('Authorization', "Bearer $AccessToken")
-
     $splatParams = @{
-        Uri     = "$($config.BaseUrl)/v1/resource/portfolios/$aref"
-        Method  = 'Get'
-        Headers = $headers
+        Uri         = "$($ActionContext.Configuration.BaseUrl)/oauth2/v1/resource/portfolios/$($actionContext.References.Account)"
+        AccessToken = $accessToken
     }
-    $responseUser = Invoke-RestMethod @splatParams  -Verbose:$false
-
-    # Add an auditMessage showing what will happen during enforcement
-    if ($dryRun -eq $true) {
-        Write-Warning "[DryRun] Enable Compasser-Students account for: [$($p.DisplayName)] will be executed during enforcement"
+    $portFolioResult = Invoke-CompasserRestMethod @splatParams
+    $correlatedPortfolio = $portfolioResult.portfolios    
+    
+    if ($null -ne $correlatedPortfolio) {
+        $lifecycleProcess = 'EnableAccount'
+    }
+    else {
+        $lifecycleProcess = 'NotFound'
     }
 
     # Process
-    if (-not($dryRun -eq $true)) {
-        Write-Verbose "Enabling Compasser-Students account with accountReference: [$aRef]"
+    switch ($lifecycleProcess) {
+        'EnableAccount' {
 
+            $splatParams = @{
+                Uri         = "$($ActionContext.Configuration.BaseUrl)/oauth2/v1/resource/portfolios/$($actionContext.References.Account)"
+                AccessToken = $accessToken
+                Method      = "PUT"
+                Body        = @{
+                    status     = 'active'
+                    project_id = $correlatedPortfolio.project_id
+                } | ConvertTo-Json
+            }
 
+            if (-not($actionContext.DryRun -eq $true)) {
+                Write-Information "Enabling Compasser-Students account with accountReference: [$($actionContext.References.Account)]"
+                $null = Invoke-CompasserRestMethod @splatparams   
+            }
+            else {
+                Write-Information "[DryRun] Enable Compasser-Students account with accountReference: [$($actionContext.References.Account)], will be executed during enforcement"
+            }
 
-        $splatParams = @{
-            Uri         = "$($config.BaseUrl)/v1/resource/portfolios/$aref"
-            Method      = 'PUT'
-            Headers     = $headers
-            ContentType = 'application/json'
-            Body        = @{
-                status     = 'active'
-                project_id = $responseUser.portfolios.project_id
-            } | ConvertTo-Json
+            # Make sure to filter out arrays from $outputContext.Data (If this is not mapped to type Array in the fieldmapping). This is not supported by HelloID.
+            $outputContext.Success = $true
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    Message = 'Enable account was successful'
+                    IsError = $false
+                })
+            break
         }
-        $null = Invoke-RestMethod @splatParams  -Verbose:$false
 
-        $success = $true
-        $auditLogs.Add([PSCustomObject]@{
-                Message = 'Enable account was successful'
-                IsError = $false
-            })
+        'NotFound' {
+            Write-Information "Compasser-Students account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
+            $outputContext.Success = $false
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    Message = "Compasser-Students account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
+                    IsError = $true
+                })
+            break
+        }
     }
-} catch {
-    $success = $false
+
+} 
+catch {
+    $outputContext.success = $false
     $ex = $PSItem
     if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
         $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
         $errorObj = Resolve-CompasserError -ExceptionObject $ex
-        $auditMessage = "Could not enable Compasser-Students account. Error: $($errorObj.FriendlyMessage)"
-        Write-Verbose "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
-    } else {
-        $auditMessage = "Could not enable Compasser-Students account. Error: $($ex.Exception.Message)"
-        Write-Verbose "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+        $auditLogMessage = "Could not enable Compasser-Students account: [$($actionContext.References.Account)]. Error: $($errorObj.FriendlyMessage)"
+        Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
     }
-    $auditLogs.Add([PSCustomObject]@{
-            Message = $auditMessage
+    else {
+        $auditLogMessage = "Could not enable Compasser-Students account: [$($actionContext.References.Account)]. Error: $($_.Exception.Message)"
+        Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+    }
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
+            Message = $auditLogMessage
             IsError = $true
         })
-    # End
-} finally {
-    $result = [PSCustomObject]@{
-        Success   = $success
-        Auditlogs = $auditLogs
-    }
-    Write-Output $result | ConvertTo-Json -Depth 10
 }
